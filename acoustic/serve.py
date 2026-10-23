@@ -7,6 +7,7 @@ from pathlib import Path
 
 def server_command():
     command = [sys.executable, '-m', 'panel', 'serve', 'app.py',
+               '--warm', '--liveness', '--liveness-endpoint', 'health',
                '--address', '0.0.0.0', '--port', os.environ.get('PORT', '5006')]
     hostname = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
     if hostname:

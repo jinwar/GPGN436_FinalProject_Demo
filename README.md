@@ -21,7 +21,8 @@ The root `render.yaml` defines two independent Python web services on Render:
 
 Each service installs its own requirements and starts with `python serve.py`.
 The launcher uses Render's `PORT` and `RENDER_EXTERNAL_HOSTNAME` to configure
-Panel and its WebSocket origin. Each student browser session has its own model
+Panel and its WebSocket origin. A lightweight `/health` liveness endpoint
+handles hosting health checks without creating interactive sessions. Each student browser session has its own model
 state and simulation results.
 
 To provision both, sign in to [Render](https://dashboard.render.com), create a
