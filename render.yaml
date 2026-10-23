@@ -2,6 +2,7 @@ services:
   - type: web
     name: acoustic-time-reversal-lab
     runtime: python
+    rootDir: acoustic
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python serve.py

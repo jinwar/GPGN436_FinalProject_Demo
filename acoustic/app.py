@@ -1,5 +1,7 @@
 """Run with: panel serve app.py --show"""
-import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from queue import SimpleQueue
+from time import perf_counter
 import numpy as np
 import panel as pn
 from bokeh.events import Tap
@@ -18,9 +20,14 @@ def make_app():
     frequency = pn.widgets.IntSlider(name='Ricker central frequency (Hz)', start=40, end=200, step=5, value=100)
     velocity = pn.widgets.IntSlider(name='Acoustic velocity (m/s)', start=1000, end=3000, step=100, value=1500)
     duration = pn.widgets.FloatSlider(name='Recording duration (s)', start=.12, end=.4, step=.02, value=.18)
+    spacing = pn.widgets.Select(name='Grid spacing dx (m)', options=[0.3, 0.4, 0.5, 0.6, 0.75, 1.0, 1.2, 1.5, 2.0, 2.4, 3.0, 4.0], value=1.0)
+    courant = pn.widgets.FloatSlider(name='Courant number C = v dt / dx', start=.1, end=.55, step=.01, value=.4)
+    timestep = pn.pane.Markdown()
     ring = pn.widgets.Button(name='Load receiver ring', button_type='default')
     clear = pn.widgets.Button(name='Clear receivers')
     run = pn.widgets.Button(name='Run forward + time reversal', button_type='primary')
+    progress = pn.indicators.Progress(name='Calculation progress', value=0, max=100, visible=False, sizing_mode='stretch_width')
+    progress_label = pn.pane.Markdown('', visible=False)
     view = pn.widgets.RadioButtonGroup(options=['Forward', 'Time reversal', 'Focus image'], value='Forward')
     player = pn.widgets.Player(name='Playback', start=0, end=149, value=0, interval=60, disabled=True, width=530)
     gain = pn.widgets.FloatSlider(name='Wavefield display gain', start=1, end=20, step=1, value=5)
@@ -48,6 +55,10 @@ def make_app():
     wave_data = ColumnDataSource(dict(t=[], f=[]))
     wave.line('t','f',source=wave_data, color='#386cb0',line_width=2)
 
+    def current_model():
+        return Model(frequency=frequency.value, velocity=velocity.value, duration=duration.value,
+                     dx=spacing.value, courant=courant.value)
+
     def reset_result(*events):
         if state['busy']:
             return
@@ -60,13 +71,27 @@ def make_app():
         pixels.data = dict(image=[np.zeros((121,121))],x=[-.5],y=[-.5],dw=[121.],dh=[121.])
         mapper.palette = list(reversed(RdBu11)); mapper.low=-1; mapper.high=1
         time_label.object = 'Configuration changed — run to update the wavefields.'
-        m = Model(frequency=frequency.value,velocity=velocity.value,duration=duration.value)
+        progress.visible = progress_label.visible = False
+        timestep.object = f'**Calculated dt = {1000*courant.value*spacing.value/velocity.value:.4f} ms** · dt = C dx / v'
+        try:
+            m = current_model()
+        except ValueError as exc:
+            run.disabled = True
+            details.object = ''
+            status.object = str(exc)
+            status.alert_type = 'warning'
+            return
+        run.disabled = False
+        pixels.data = dict(image=[np.zeros((m.nx,m.nx))],x=[-m.dx/2],y=[-m.dx/2],dw=[m.length+m.dx],dh=[m.length+m.dx])
         from acoustic import ricker
         t = np.linspace(0,4/m.frequency,300)
         wave_data.data = dict(t=t,f=ricker(t,m.frequency))
         details.object = f'**{m.nx} × {m.nx}** visible grid · Δx = {m.dx:.2f} m · Δt = {1000*m.dt:.3f} ms\n\n{len(state["receivers"])} receivers · homogeneous medium'
         status.object = 'Ready to simulate. Use a surrounding receiver array for the clearest focus.'
         status.alert_type = 'info'
+        if m.velocity / (2.5*m.frequency*m.dx) < 6:
+            status.object += ' Coarse grid: fewer than six points per wavelength at 2.5 times the central frequency; numerical dispersion may be visible.'
+            status.alert_type = 'warning'
 
     def sync_points():
         points.data = dict(x=[state['source'][0]],y=[state['source'][1]])
@@ -120,49 +145,86 @@ def make_app():
         pixels.data = dict(image=[field],x=[-m.dx/2],y=[-m.dx/2],dw=[m.length+m.dx],dh=[m.length+m.dx])
         player.disabled = view.value == 'Focus image'
 
-    @pn.io.with_lock
-    async def calculate(event):
+    def calculate(event):
+        if state["busy"]:
+            return
         if not state['receivers']:
             status.object='Place at least one receiver before running.'; status.alert_type='warning'
             return
+        started_at = perf_counter()
         state['busy'] = True
         player.direction = 0
         player.disabled = True
-        controls = [run,ring,clear,frequency,velocity,duration,mode]
+        controls = [run,ring,clear,frequency,velocity,duration,spacing,courant,mode,view,gain]
         for widget in controls:
             widget.disabled=True
-        run.loading=True
+        progress.value = 0
+        progress.visible = progress_label.visible = True
+        progress_label.object = '**Preparing calculation · 0%**'
         status.object='Computing forward recordings and reverse-time propagation…'; status.alert_type='info'
+        updates = SimpleQueue()
+        executor = ThreadPoolExecutor(max_workers=1)
         try:
-            model = Model(frequency=frequency.value,velocity=velocity.value,duration=duration.value)
-            result = await asyncio.to_thread(simulate,model,state['source'],list(state['receivers']))
-            for key in ('forward', 'reverse'):
-                result[key + '_scale'] = max(float(np.max(np.abs(result[key]))), 1e-30)
-            state['result']=result
-            player.end=len(result['frame_times'])-1; player.value=0
-            view.value='Forward'
-            data=result['data']; norm=max(float(np.max(np.abs(data))),1e-30)
-            trace_data.data=dict(xs=[result['t']]*data.shape[1],
-                ys=[i+1+.4*data[:,i]/norm for i in range(data.shape[1])],
-                color=[Category10[10][i%10] for i in range(data.shape[1])])
-            render()
-            status.object='Simulation complete. Press ▶ to animate; switch to Time reversal or Focus image.'
-            farthest=max(np.linalg.norm(np.asarray(state['receivers'])-state['source'],axis=1))
-            if model.duration < farthest/model.velocity+3/model.frequency:
-                status.object+=' Recording is short: some arrivals may be truncated; increase duration.'
-            if len(state['receivers']) < 8:
-                status.object+=' Sparse receiver coverage can produce ambiguous focusing.'
-            status.alert_type='success'
+            model = current_model()
+            future = executor.submit(simulate, model, state['source'], list(state['receivers']),
+                                     lambda percent, phase: updates.put((percent, phase)))
         except Exception as exc:
-            status.object=f'Simulation failed: {exc}'; status.alert_type='danger'
-        finally:
-            state['busy']=False; run.loading=False
+            executor.shutdown(wait=False)
+            state['busy'] = False
             for widget in controls:
-                widget.disabled=False
+                widget.disabled = False
+            player.disabled = state['result'] is None or view.value == 'Focus image'
+            progress_label.object = '**Calculation failed**'
+            status.object = f'Simulation failed: {exc}'
+            status.alert_type = 'danger'
+            return
+
+        def poll_calculation():
+            # This short document callback owns all UI updates; the worker only queues data.
+            while not updates.empty():
+                percent, phase = updates.get()
+                progress.value = percent
+                progress_label.object = f'**{phase} · {percent}%**'
+            if not future.done():
+                return
+            poller.stop()
+            try:
+                result = future.result()
+                for key in ('forward', 'reverse'):
+                    result[key + '_scale'] = max(float(np.max(np.abs(result[key]))), 1e-30)
+                state['result']=result
+                player.end=len(result['frame_times'])-1; player.value=0
+                view.value='Forward'
+                data=result['data']; norm=max(float(np.max(np.abs(data))),1e-30)
+                trace_data.data=dict(xs=[result['t']]*data.shape[1],
+                    ys=[i+1+.4*data[:,i]/norm for i in range(data.shape[1])],
+                    color=[Category10[10][i%10] for i in range(data.shape[1])])
+                render()
+                elapsed = perf_counter() - started_at
+                status.object=f'Simulation complete in {elapsed:.2f} s. Press ▶ to animate; switch to Time reversal or Focus image.'
+                farthest=max(np.linalg.norm(np.asarray(state['receivers'])-state['source'],axis=1))
+                if model.duration < farthest/model.velocity+3/model.frequency:
+                    status.object+=' Recording is short: some arrivals may be truncated; increase duration.'
+                if len(state['receivers']) < 8:
+                    status.object+=' Sparse receiver coverage can produce ambiguous focusing.'
+                status.alert_type='success'
+                progress.value = 100
+                progress_label.object = f'**Complete · 100% · Total calculation time: {elapsed:.2f} s**'
+            except Exception as exc:
+                status.object=f'Simulation failed: {exc}'; status.alert_type='danger'
+                progress_label.object = '**Calculation failed**'
+            finally:
+                executor.shutdown(wait=False)
+                state['busy'] = False
+                for widget in controls:
+                    widget.disabled = False
+                player.disabled = state['result'] is None or view.value == 'Focus image'
+
+        poller = pn.state.add_periodic_callback(poll_calculation, period=100)
 
     plot.on_event(Tap,tap)
     ring.on_click(load_ring); clear.on_click(clear_receivers); run.on_click(calculate)
-    for widget in (frequency,velocity,duration):
+    for widget in (frequency,velocity,duration,spacing,courant):
         widget.param.watch(reset_result,'value')
     for widget in (player,view,gain):
         widget.param.watch(render,'value')
@@ -170,9 +232,9 @@ def make_app():
     return pn.template.FastListTemplate(
         title='Acoustic time-reversal lab', accent_base_color='#176b86', header_background='#123e52',
         sidebar=[pn.pane.Markdown('### Experiment\nClick the model to place a source or receivers. **Source** replaces the star; **Delete** removes a nearby receiver.'),
-                 mode,ring,clear,frequency,velocity,duration,wave,details,run,gain,
+                 mode,ring,clear,frequency,velocity,duration,spacing,courant,timestep,wave,details,run,progress_label,progress,gain,
                  pn.pane.Markdown('### Physics\nEighth-order spatial differences, second-order time stepping, and an outer absorbing sponge.\n\nThe focus image integrates reversed pressure squared around the expected focusing time. Finite receiver coverage limits reconstruction; amplitudes are arbitrary.')],
-        main=[status,pn.Row(view),time_label,pn.pane.Bokeh(plot),player,pn.pane.Bokeh(traces)],
+        main=[status,time_label,pn.pane.Bokeh(plot),pn.Column(pn.Row(view),player),pn.pane.Bokeh(traces)],
         sidebar_width=330)
 
 

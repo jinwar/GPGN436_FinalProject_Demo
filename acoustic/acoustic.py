@@ -12,11 +12,17 @@ class Model:
     velocity: float = 1500.0
     duration: float = 0.18
     length: float = 120.0
+    dx: float = 1.0
+    courant: float = 0.4
 
     def __post_init__(self):
-        for name in ('frequency', 'velocity', 'duration', 'length'):
+        for name in ('frequency', 'velocity', 'duration', 'length', 'dx', 'courant'):
             if not np.isfinite(getattr(self, name)) or getattr(self, name) <= 0:
                 raise ValueError(f'{name} must be finite and positive')
+        if self.courant > 0.55:
+            raise ValueError('Courant number must be at most 0.55 for this spatial stencil.')
+        if self.dx > self.length or not np.isclose(self.length / self.dx, round(self.length / self.dx)):
+            raise ValueError('Grid spacing must divide the model length exactly.')
         if self.duration < 4 / self.frequency:
             raise ValueError('Recording must include at least four wavelet periods.')
         if self.nx > 401 or self.duration / self.dt > 6000:
@@ -24,16 +30,11 @@ class Model:
 
     @property
     def nx(self):
-        # Six points per wavelength at 2.5 times the central frequency.
-        return max(61, int(np.ceil(self.length * 15 * self.frequency / self.velocity)) + 1)
-
-    @property
-    def dx(self):
-        return self.length / (self.nx - 1)
+        return int(round(self.length / self.dx)) + 1
 
     @property
     def dt(self):
-        return 0.4 * self.dx / self.velocity
+        return self.courant * self.dx / self.velocity
 
 
 def ricker(t, frequency):
@@ -76,11 +77,12 @@ def point_weights(points, model, pad):
             np.stack(((1-fx)*(1-fy),fx*(1-fy),(1-fx)*fy,fx*fy), 1))
 
 
-def simulate(model, source, receivers):
+def simulate(model, source, receivers, progress=None):
     """Record forward data, then reinject their time reversal from zero fields.
 
     Imaging condition: integral of reverse pressure squared in a +/- half-period
     window about T - t0. It uses emission time, never source coordinates.
+    Optional progress(percent, phase) reports completed time steps from the worker.
     Movie frames are decimated; receiver recordings and imaging use every step.
     """
     if not 1 <= len(receivers) <= 64:
@@ -103,6 +105,7 @@ def simulate(model, source, receivers):
     movies = []
     image = np.zeros((model.nx,model.nx))
     focus_time = t[-1] - 1.5/model.frequency
+    last_percent = -1
     for reverse in (False, True):
         ## . . Initialize wavefields; reverse propagation starts from rest
         UUo = np.zeros((n,n))
@@ -111,6 +114,10 @@ def simulate(model, source, receivers):
         locations = rw if reverse else sw
         yy, xx, weights = locations
         for it in range(len(t)):
+            percent = int(100 * (int(reverse) * len(t) + it) / (2 * len(t)))
+            if progress is not None and percent != last_percent:
+                progress(percent, "Time reversal" if reverse else "Forward propagation")
+                last_percent = percent
             # Data and frame at t[it], before advancing to the next time step.
             if not reverse:
                 data[it] = np.sum(UUo[rw[0],rw[1]]*rw[2],axis=1)
@@ -126,6 +133,8 @@ def simulate(model, source, receivers):
             np.add.at(tmp,(yy,xx), weights*forcing[:,None]*(model.velocity*dt/dx)**2)
             UUm, UUo = UUo, tmp
         movies.append(np.stack(frames))
+    if progress is not None:
+        progress(100, "Complete")
     peak_y, peak_x = np.unravel_index(np.argmax(image), image.shape)
     return dict(model=model, t=t, wavelet=F, data=data, forward=movies[0],
                 reverse=movies[1], frame_times=t[indices], image=image,

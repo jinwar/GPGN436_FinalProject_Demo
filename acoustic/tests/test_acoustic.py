@@ -45,3 +45,31 @@ def test_invalid_inputs():
         simulate(Model(),(60,60),[])
     with pytest.raises(ValueError):
         simulate(Model(),(-1,60),[(30,30)])
+
+
+def test_progress_covers_both_passes_without_changing_results():
+    updates = []
+    model = Model(frequency=40, duration=.12)
+    args = (model, (60, 60), [(30, 30)])
+    expected = simulate(*args)
+    actual = simulate(*args, progress=lambda percent, phase: updates.append((percent, phase)))
+    percentages = [percent for percent, _ in updates]
+    assert percentages[0] == 0
+    assert percentages[-1] == 100
+    assert percentages == sorted(set(percentages))
+    assert {phase for _, phase in updates} == {'Forward propagation', 'Time reversal', 'Complete'}
+    np.testing.assert_array_equal(actual['data'], expected['data'])
+    np.testing.assert_array_equal(actual['reverse'], expected['reverse'])
+
+
+def test_user_grid_and_courant():
+    m = Model(dx=2.0, courant=.5, velocity=2000)
+    assert m.nx == 61
+    assert m.dt == pytest.approx(.0005)
+    r = simulate(m, (60, 60), [(30, 30)])
+    assert r['forward'].shape[1:] == (61, 61)
+    assert r['t'][1] == pytest.approx(m.dt)
+    assert np.isfinite(r['reverse']).all()
+    for kwargs in ({'dx': 0}, {'dx': .1}, {'dx': 7}, {'courant': 0}, {'courant': .56}, {'courant': float('nan')}):
+        with pytest.raises(ValueError):
+            Model(**kwargs)
