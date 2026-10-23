@@ -2,6 +2,14 @@
 
 This repository contains independent project demonstrations, each in its own subfolder.
 
+## Online demos for students
+
+- [Acoustic time-reversal lab](https://acoustic-time-reversal-lab.onrender.com/app)
+- [Confined aquifer pumping and recovery](https://confined-aquifer-lab.onrender.com/app)
+
+Both run on free Render instances. Allow about a minute for the first visit
+if an app has gone idle. No student account or local installation is required.
+
 ## Projects
 
 - [Confined aquifer pumping and recovery](aquifer/README.md): radial pressure diffusion, constant-rate production, and shut-in recovery on a logarithmic grid.
