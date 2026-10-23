@@ -56,3 +56,10 @@ flow, volume conservation throughout production/recovery, cutoff refinement,
 parameter validation, and spatial/temporal refinement.
 
 Property context: [sandstone compressibility measurement](https://academic.oup.com/gji/article/164/3/685/2133401).
+
+## Online deployment
+
+The repository-root `render.yaml` includes this app as `confined-aquifer-lab`.
+Render runs `python serve.py`, which reads the assigned port and public hostname
+to allow Panel's WebSocket connection from the deployed site. See the root README
+for provisioning instructions and free-service limitations.

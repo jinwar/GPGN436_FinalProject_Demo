@@ -10,3 +10,14 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.14
+  - type: web
+    name: confined-aquifer-lab
+    runtime: python
+    rootDir: aquifer
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python serve.py
+    healthCheckPath: /app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.14
