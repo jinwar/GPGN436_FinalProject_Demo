@@ -65,6 +65,6 @@ to `main` alone do not republish the site; run the deployment script after chang
 The build copies the authoritative solver files into the generated site. Relative
 URLs allow the demo to run under the repository's Pages path.
 
-Render deployment configuration and launchers have been removed. Existing hosted
-services are managed separately in the Render dashboard; deleting a configuration
-file alone does not stop an already-provisioned service.
+Render deployment configuration and launchers have been removed. The old Render
+Blueprint was disconnected and both web services were suspended on November 11,
+2026. They are offline; their service records remain available in Render.
