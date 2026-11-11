@@ -52,8 +52,8 @@ reconstruction of the complete boundary wavefield. The imaging condition is
 The star is a visual reference only. Sparse/one-sided arrays, short recordings,
 low frequencies and sponge reflections broaden the focus or create artifacts.
 
-Computation runs in a worker thread; browser sessions have independent geometry and
-results. Very large models are rejected to bound memory and computation.
+In the local Panel app, computation runs in a worker thread. The GitHub Pages
+version uses a Pyodide Web Worker; browser tabs have independent geometry and results. Very large models are rejected to bound memory and computation.
 
 ## Validation
 
@@ -68,18 +68,11 @@ Tests cover wavelet spectrum, travel times, off-grid reciprocity, finite propaga
 and localization with a surrounding receiver array. No external services or credentials
 are required. Install packages from PyPI; run the Panel server again in each new session.
 
-## Publish the website on Render
+## Browser demo on GitHub Pages
 
-[Deploy to Render](https://render.com/deploy?repo=https://github.com/jinwar/GPGN436_FinalProject_Demo)
-
-Sign in to Render, follow the deployment link, authorize this GitHub repository if
-requested, and create the Blueprint service. The repository-root `render.yaml` sets `rootDir: acoustic` and defines
-a Python web service on the free plan. After deployment, open the service URL shown
-in Render and select `/app` if it does not open automatically. This is separate
-from saving or publishing a Codex cloud environment.
-
-`serve.py` uses Render's `PORT` and `RENDER_EXTERNAL_HOSTNAME` to configure the
-listener and permitted WebSocket origin. No API keys are needed by the application.
-Free services may sleep when idle and take time to wake up. Multiple simultaneous
-large simulations can exceed free-tier memory; use smaller models or a larger
-instance for shared classroom use. The app does not persist browser-session results.
+[Open this lab](https://jinwar.github.io/GPGN436_FinalProject_Demo/#acoustic).
+Python and NumPy execute locally in a Pyodide Web Worker. Use Run to compute,
+then Play or the frame slider to inspect the results. Cancel terminates an active
+calculation. Changing model inputs clears the previous result.
+See the [root README](../README.md) for static preview and deployment instructions.
+The Panel instructions above are an optional local alternative.

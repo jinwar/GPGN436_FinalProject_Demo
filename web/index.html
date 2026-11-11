@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GPGN 436/536 · Computational geophysics labs</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><div class="eyebrow">COLORADO SCHOOL OF MINES · GPGN 436/536</div><h1>Computational geophysics labs</h1><p>Explore waves and diffusion. Python runs directly in your browser.</p><nav aria-label="Choose a lab"><a href="#acoustic" id="acoustic-tab">Acoustic time reversal</a><a href="#aquifer" id="aquifer-tab">Aquifer pumping & recovery</a></nav></header>
+<main>
+<aside><h2 id="lab-title"></h2><form id="parameters"><div id="inputs"></div><button id="run" type="submit" disabled>Loading Python…</button></form><button id="cancel" disabled>Cancel calculation</button><p id="details" class="muted"></p><p id="warning" class="warning"></p><details><summary>About this model</summary><p id="explanation"></p><a id="source-link" target="_blank" rel="noopener">Read the Python solver and model notes ↗</a></details></aside>
+<section class="results" aria-label="Simulation results"><div class="status"><span id="status" role="status" aria-live="polite">Loading Python and NumPy. The first visit downloads the runtime; please allow a moment.</span><progress id="progress" max="100" value="0" aria-label="Calculation progress"></progress></div>
+<div id="geometry" class="toolbar"><label>Click action <select id="mode"><option>Receiver</option><option>Source</option><option>Delete</option></select></label><button id="ring">Receiver ring</button><button id="clear">Clear receivers</button><span>★ Source · ▲ Receivers</span></div>
+<div class="toolbar"><label>View <select id="view"></select></label><label id="gain-label">Display gain <input id="gain" type="range" min="1" max="20" value="5"></label></div>
+<div class="plot-card"><h2 id="plot-title"></h2><canvas id="primary" width="760" height="650" aria-label="Model plot"></canvas><p id="frame-label" class="caption"></p><div id="scale" class="caption"></div></div>
+<div class="toolbar playback"><button id="play" disabled>Play</button><label for="frame">Frame</label><input id="frame" type="range" min="0" max="0" value="0" disabled><span id="frame-number">0 / 0</span></div>
+<p id="diagnostics" class="diagnostics"></p>
+<div class="plot-card"><h2 id="history-title"></h2><canvas id="history" width="760" height="260" aria-label="Recorded time series"></canvas></div>
+<div id="wave-card" class="plot-card"><h2>Source wavelet</h2><canvas id="wavelet" width="760" height="200" aria-label="Ricker source wavelet"></canvas></div>
+</section></main><footer>No account or Python installation needed. Calculations stay in this tab. Initial loading needs an internet connection. <a href="https://github.com/jinwar/GPGN436_FinalProject_Demo">Repository ↗</a></footer><script type="module" src="app.js"></script>
+</body></html>

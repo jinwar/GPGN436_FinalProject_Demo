@@ -57,9 +57,11 @@ parameter validation, and spatial/temporal refinement.
 
 Property context: [sandstone compressibility measurement](https://academic.oup.com/gji/article/164/3/685/2133401).
 
-## Online deployment
+## Browser demo on GitHub Pages
 
-The repository-root `render.yaml` includes this app as `confined-aquifer-lab`.
-Render runs `python serve.py`, which reads the assigned port and public hostname
-to allow Panel's WebSocket connection from the deployed site. See the root README
-for provisioning instructions and free-service limitations.
+[Open this lab](https://jinwar.github.io/GPGN436_FinalProject_Demo/#aquifer).
+Python and NumPy execute locally in a Pyodide Web Worker. Use Run to compute,
+then Play or the frame slider to inspect the results. Cancel terminates an active
+calculation. Changing model inputs clears the previous result.
+See the [root README](../README.md) for static preview and deployment instructions.
+The Panel instructions above are an optional local alternative.

@@ -1,48 +1,70 @@
 # GPGN 436/536 Final Project Demos
 
-This repository contains independent project demonstrations, each in its own subfolder.
-
 ## Online demos for students
 
-- [Acoustic time-reversal lab](https://acoustic-time-reversal-lab.onrender.com/app)
-- [Confined aquifer pumping and recovery](https://confined-aquifer-lab.onrender.com/app)
+- [Acoustic time-reversal lab](https://jinwar.github.io/GPGN436_FinalProject_Demo/#acoustic)
+- [Confined aquifer pumping and recovery](https://jinwar.github.io/GPGN436_FinalProject_Demo/#aquifer)
 
-Both run on free Render instances. Allow about a minute for the first visit
-if an app has gone idle. No student account or local installation is required.
+Both demos run Python and NumPy directly in your browser using **Pyodide**.
+No account, Python installation, or application server is required. The first
+visit downloads the Python runtime and NumPy from jsDelivr; subsequent visits
+can use the browser cache. Each tab has its own calculation state. Performance
+and available memory depend on the student's device. Closing/reloading the tab
+clears the results. No simulation inputs are sent to a backend.
 
-## Projects
+## Projects and numerical methods
 
-- [Confined aquifer pumping and recovery](aquifer/README.md): radial pressure diffusion, constant-rate production, and shut-in recovery on a logarithmic grid.
+- [Acoustic time reversal](acoustic/README.md): 2D wave propagation, receiver recordings, backpropagation, and focusing.
+- [Confined aquifer](aquifer/README.md): radial pressure diffusion, constant-rate production, shut-in recovery, and volume conservation.
 
-- [Acoustic time-reversal lab](acoustic/README.md): interactive 2D acoustic propagation and source localization using Python and Panel.
+The browser runs the same teaching solvers in `acoustic/acoustic.py` and
+`aquifer/aquifer.py`. A module Web Worker keeps calculations off the UI thread.
+Progress messages update the page, and Cancel terminates and restarts the worker.
+The static UI provides geometry editing, parameter controls, plots, and playback.
+Acoustic grids are limited to 241 × 241 nodes in the browser to bound movie memory.
+Aquifer playback retains at most 181 frames, including shut-in, while well history
+and diagnostics use every numerical step. The optional local Panel apps remain
+available in each project directory.
 
-See each project's README for setup, run, and validation instructions.
+## Preview locally
 
-## Deployment
+```bash
+python scripts/build_site.py
+python -m http.server 8000 --directory _site
+```
 
-The root `render.yaml` defines two independent Python web services on Render:
+Open http://localhost:8000. An HTTP server is needed (opening `index.html` as a
+local file does not support worker/module loading). Internet access is needed
+for the pinned Pyodide 0.27.7 runtime and NumPy. No Node build or Panel server is
+needed for the browser demos.
 
-| Service | Working directory | App route |
-| --- | --- | --- |
-| `acoustic-time-reversal-lab` | `acoustic/` | `/app` |
-| `confined-aquifer-lab` | `aquifer/` | `/app` |
+## Validation
 
-Each service installs its own requirements and starts with `python serve.py`.
-The launcher uses Render's `PORT` and `RENDER_EXTERNAL_HOSTNAME` to configure
-Panel and its WebSocket origin. A lightweight `/health` liveness endpoint
-handles hosting health checks without creating interactive sessions. Each student browser session has its own model
-state and simulation results.
+```bash
+python -m pip install numpy pytest
+(cd acoustic && python -m pytest -q)
+(cd aquifer && python -m pytest -q)
+```
 
-To provision both, sign in to [Render](https://dashboard.render.com), create a
-new Blueprint from this repository's `main` branch, and review the two free
-web services before deploying. For an existing Blueprint, sync it to the latest
-commit. Share each assigned HTTPS service URL with `/app` appended after both
-services report Live and a browser simulation succeeds.
+## GitHub Pages deployment
 
-Free services sleep after 15 idle minutes and can take about a minute to wake.
-They share the workspace's 750 monthly free instance hours. Memory and CPU are
-limited: test expected classroom concurrency, especially for acoustic wavefield
-movies, before a large live session. Paid instances are an optional later choice;
-this Blueprint does not select a paid instance.
+GitHub Pages publishes the generated `gh-pages` branch from its root directory.
+Repository **Settings → Pages → Source** is **Deploy from a branch**, with
+**gh-pages / (root)** selected. No custom workflow or application server is needed.
 
-See [Render free-service limits](https://render.com/docs/free).
+After updating and testing the source on `main`, publish with:
+
+```bash
+python scripts/deploy_pages.py
+```
+
+This script requires Git and an authenticated GitHub CLI (`gh`). It builds `_site/`,
+then commits and pushes the output using a temporary checkout of `gh-pages`.
+GitHub's standard Pages deployment publishes that branch automatically. Changes
+to `main` alone do not republish the site; run the deployment script after changes.
+The build copies the authoritative solver files into the generated site. Relative
+URLs allow the demo to run under the repository's Pages path.
+
+Render deployment configuration and launchers have been removed. Existing hosted
+services are managed separately in the Render dashboard; deleting a configuration
+file alone does not stop an already-provisioned service.
